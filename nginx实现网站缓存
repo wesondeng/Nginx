@@ -1,0 +1,74 @@
+user  nginx;
+worker_processes  1;
+
+error_log  /var/log/nginx/error.log warn;
+pid        /var/run/nginx.pid;
+
+
+events {
+    worker_connections  1024;
+}
+
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  65;
+    #gzip  on;
+
+    include /etc/nginx/conf.d/*.conf;
+
+    proxy_cache_path /var/www/cache # 缓存数据存储在 /var/www/cache 目录中
+    levels=1:2  # 目录分级
+    keys_zone=test_cache:10m  # 定义缓存区
+    max_size=1G  # 目录最大大小为 1G，超过时，不常用的将被删除
+    inactive=10m; # 限定时间内没有被访问的缓存将被删除
+
+    server {
+        listen 8080;
+        location / {
+            proxy_pass http://PPnode;
+            proxy_cache test_cache;
+            proxy_cache_valid 200 304 10m;# 状态码为 200 304 对应的 URL 的缓存时间为 10 分钟
+            proxy_cache_valid any 1m;
+            proxy_cache_key $uri;# 设置获取 cache 的 key
+        }
+    }
+    
+    server {
+    listen 8080;
+    location / {
+        proxy_cache test_cache;
+    }
+}
+
+
+    server {
+        listen 8081;
+        root /root/html;
+    }
+    upstream PPnode  {
+        server 127.0.0.1:8081;
+    }
+}
+
+## 创建缓存目录 mkdir -p /var/www/cache
+##  mkdir -p /root/html
+$ echo "Hello, I am a.html" > /root/html/a.html
+$ echo "Hello, I am b.html" > /root/html/b.html
+
+##
+$ curl 127.0.0.1:8080/a.html
+$ curl 127.0.0.1:8080/b.html
+$ sudo tree /var/www/cache 
+查看cache目录下多了缓存的文件
