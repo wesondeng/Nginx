@@ -1,0 +1,74 @@
+#打开nginx的配置文件 sudo vim /etc/nginx/nginx.conf
+user  nginx;
+worker_processes  2;
+
+error_log  /var/log/nginx/error.log warn;
+pid        /var/run/nginx.pid;
+
+
+events {
+    worker_connections  1024;
+}
+
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  65;
+
+    #gzip  on;
+    include /etc/nginx/conf.d/*.conf;
+    ## 配置upstream模块，3 个不同端口用来模拟多节点
+    upstream LBnode {
+        # ip_hash; 
+        # least_conn;最少连接负载均衡
+        # 下面是采取权重方式的负载均衡
+        server 127.0.0.1:8081 weight=2;
+        server 127.0.0.1:8082 weight=3;
+        server 127.0.0.1:8083 weight=5;
+    }
+    ## 配置反向代理，监听81端口，将访问请求转发到LBnode集群
+    server {
+        listen 81;
+        location / {
+            proxy_pass http://LBnode;
+        }
+    }
+    ## 第一个虚拟服务器，在命令行分别向/root/html/node1/index.html添加欢迎语内容
+    server {
+        listen 8081;
+        root /root/html/node1;
+        location / {
+            try_files $uri $uri/ =404;
+        }
+    }
+
+    server {
+        listen 8082;
+        root /root/html/node2;
+location / {
+        try_files $uri $uri/ =404;
+        }
+    }
+
+    server {
+        listen 8083;
+        root /root/html/node3;
+        location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+
+}
+                 
