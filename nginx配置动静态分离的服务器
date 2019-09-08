@@ -1,0 +1,80 @@
+user  nginx;
+worker_processes  1;
+
+error_log  /var/log/nginx/error.log warn;
+pid        /var/run/nginx.pid;
+
+
+events {
+    worker_connections  1024;
+}
+
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  65;
+    #gzip  on;
+
+    include /etc/nginx/conf.d/*.conf;
+    ## 配置处理静态资源的服务器listen8081,8082端口，创建/root/html/static文件夹
+    server {
+        listen 8081;
+        root /root/html/static;
+    }
+    server {
+        listen 8082;
+        root /root/html/static;
+    }
+    ## 配置动态资源服务器，使用fastcgi转发请求，php5-fpm安装
+    server {
+        listen 8083;
+        location / {
+            fastcgi_index index.php;
+            fastcgi_pass unix:/var/run/php5-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+    }
+    server {
+        listen 8084;
+        location / {
+            fastcgi_index index.php;
+            fastcgi_pass unix:/var/run/php5-fpm.sock;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+    }
+    ##上游服务器结点
+    upstream LBnode1  {
+        server 127.0.0.1:8081;
+        server 127.0.0.1:8082;
+    }
+    upstream LBnode2 {
+        server 127.0.0.1:8083;
+        server 127.0.0.1:8084;
+    }
+    ##默认访问8080端口，进行静态和动态资源请求的转发
+    server {
+        listen 8080;
+        location ~ .*\.(html|htm|css|js|ico|png|jpg|jpeg)$ {
+            proxy_pass http://LBnode1;
+        }
+        location ~ \.php$ {
+            proxy_pass http://LBnode2;
+        }
+
+
+    }
+}
+
