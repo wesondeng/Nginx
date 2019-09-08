@@ -1,0 +1,25 @@
+安装ipvsadm工具
+sudo apt-get install ipvsadm
+sudo ipvsadm -L
+
+使用docker创建两台server，默认都安装了nginx
+docker run --name=RealServer1 -tdi ubuntu
+docker run --name=RealServer2 -tdi ubuntu
+
+修改nginx展示页面，分别显示server1和server2
+
+配置LB，开启LB路由内核转发
+关闭LB的nginx服务
+sudo service nginx stop
+echo '1' | sudo tee /proc/sys/net/ipv4/ip_forward
+
+定义集群服务
+sudo ipvsadm -A -t 120.26.15.9:80 -s rr         #定义集群服务
+sudo ipvsadm -a -t 120.26.15.9:80 -r 192.168.0.2 -m #添加 RealServer1
+sudo ipvsadm -a -t 120.26.15.9:80 -r 192.168.0.3 -m #添加 RealServer2
+sudo ipvsadm -l                 #查看 ipvs 定义的规则
+
+测试：
+LB输入IPV：80地址，F5刷新多次
+ipvsadm -l --stats查看结果
+
