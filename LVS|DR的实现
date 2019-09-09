@@ -1,0 +1,30 @@
+#docker创建三台服务器，模拟集群
+docker run --privileged --name=LoadBalancer1 -tid ubuntu
+docker run --privileged --name=RealServer1 -tid ubuntu
+docker run --privileged --name=RealServer2 -tid ubuntu
+
+#修改内核参数，realserver为例
+echo "1" > /proc/sys/net/ipv4/conf/lo/arp_ignore
+echo "1" > /proc/sys/net/ipv4/conf/all/arp_ignore
+#1如果接收 ARP 请求的网卡 IP 和目标 IP 相同，则响应 ARP 请求
+
+表示忽略 IP 数据包的源 IP 地址，总是选择网络接口所配置的最合适的 IP 地址作为 ARP 请求数据包的源 IP 地址
+echo "2" > /proc/sys/net/ipv4/conf/lo/arp_announce
+echo "2" > /proc/sys/net/ipv4/conf/all/arp_announce
+sysctl -p  # 使得上面的配置立即生效
+
+#配置网卡别名
+# 配置虚拟IP
+ifconfig lo:0 192.168.0.10 broadcast 192.168.0.10 netmask 255.255.255.255 up
+# 添加路由，因为本就是相同的网段所以可以不添加该路由
+route add -host 192.168.0.10 dev lo:0
+
+#配置LB服务器创建 eth0 的别名并绑定 VIP 地址，作为集群同时使用：
+apt-get install ipvsadm
+ifconfig eth0:0 192.168.0.10 netmask 255.255.255.0 up
+ipvsadm -A -t 192.168.0.10:80 -s rr         # 定义集群服务
+ipvsadm -a -t 192.168.0.10:80 -r 192.168.0.3 -g # 添加 RealServer1
+ipvsadm -a -t 192.168.0.10:80 -r 192.168.0.4 -g # 添加 RealServer2
+ipvsadm -l                  # 查看 ipvs 定义的规则
+
+#测试：输入VIP的地址
